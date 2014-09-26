@@ -3,7 +3,8 @@ ABS_BAMTOOLS_DIR := $(realpath $(BAMTOOLS_DIR))
 CXX := g++
 CXXFLAGS := -Wno-deprecated -Wall -g -Wl,-rpath,$(ABS_BAMTOOLS_DIR)/lib/
 INCLUDES := -I$(BAMTOOLS_DIR)/include/ -L$(BAMTOOLS_DIR)/lib/
-OBJS := $(FASTAHACK)
+FASTAHACK := fastahack/Fasta.o
+OBJS := $(FASTAHACK) fastahack/split.o
 
 all: Microassembler
 

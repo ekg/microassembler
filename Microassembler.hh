@@ -27,11 +27,13 @@
 
 #include "api/BamReader.h"
 #include "api/BamWriter.h"
+#include "fastahack/Fasta.h"
 
 #include "align.hh"
 #include "util.hh"
 #include "Mer.hh"
 #include "Ref.hh"
+#include "Region.hh"
 #include "ReadInfo.hh"
 #include "ReadStart.hh"
 #include "Transcript.hh"
@@ -88,10 +90,12 @@ public:
 	int MIN_QUAL;
 	int MIN_MAP_QUAL;
 
-	string MAPFILE;
-	string RG_FILE;
+	string BAMFILE;
+
 	string REFFILE;
 	string READSET;
+    FastaReference reference;
+    string REGION;
 
 	string PREFIX;
 
@@ -112,8 +116,6 @@ public:
 	int  QUAD_ASM;
     int  FASTQ_ASM;
 	int  NODE_STRLEN;
-
-	int  BAMFILE;
 
 	int DFS_LIMIT;
 	int PATH_LIMIT;
@@ -171,9 +173,9 @@ public:
         FASTQ_ASM = 0;
 		NODE_STRLEN = 1000;
 
-		BAMFILE = 0;
-		RG_FILE = "";
-
+		BAMFILE = "";
+        REGION = "";
+	
 		DFS_LIMIT = 1000;
 		PATH_LIMIT = 0;
 		MAX_INDEL_LEN = 250;

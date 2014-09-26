@@ -1775,7 +1775,7 @@ Node_t * Graph_t::getNode(Mer_t nodeid)
 {
 	MerTable_t::iterator ni = nodes_m.find(nodeid);
 
-	if (ni == nodes_m.end()) { return false; }
+	if (ni == nodes_m.end()) { return (Node_t*) false; }
 
 	return ni->second;
 }
@@ -1796,7 +1796,7 @@ Node_t * Graph_t::getNode(Edge_t & edge)
 {
 	MerTable_t::iterator ni = nodes_m.find(edge.nodeid_m);
 
-	if (ni == nodes_m.end()) { return false; }
+	if (ni == nodes_m.end()) { return (Node_t*) false; }
 
 	return ni->second;
 }

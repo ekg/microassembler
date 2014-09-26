@@ -15,7 +15,7 @@ void Microassembler::printConfiguration(ostream & out)
 {
 	out << "VERBOSE: "          << VERBOSE << endl;
 
-	out << "mapfile: "          << MAPFILE << endl;
+	out << "bamfile: "          << BAMFILE << endl;
 	out << "reffile: "          << REFFILE << endl;
 	out << "readset: "          << READSET << endl;
 	out << "prefix: "           << PREFIX  << endl;
@@ -411,9 +411,9 @@ int Microassembler::run(int argc, char** argv)
 	stringstream helptext;
 	helptext << USAGE <<
 		"\n"
-		"   -r <reffile>  : multifasta file to reference regions\n"
-		"   -m <mapfile>  : file of mapped reads\n"
-		"   -g <RGfile>   : read group file\n"
+		"   -f <reffile>  : multifasta file to reference regions\n"
+		"   -b <bamfile>  : file of mapped reads\n"
+        "   -r <region>   : target region in chr:start-end format e.g. chrX:0-10\n"
 		"   -s <name>     : label for reads (default: " << READSET << ")\n"
 		"   -p <prefix>   : use prefix (default: mapfile)\n"
 		"\n"
@@ -421,7 +421,7 @@ int Microassembler::run(int argc, char** argv)
 		"   -K <kmersize> : max kmersize (default: " << maxK << ")\n"
 		"   -q <qv>       : trim bases below qv at 5' and 3' (default: " << MIN_QV << ")\n"
 		"   -Q <char>     : quality value range (default: " << (char) QV_RANGE << ")\n"
-		"   -b <mq>       : minimum read mapping quality in Phred-scale (default: " << MIN_MAP_QUAL << ")\n"
+		"   -C <mq>       : minimum read mapping quality in Phred-scale (default: " << MIN_MAP_QUAL << ")\n"
 		"   -l <tiplen>   : max tip length (default: " << MAX_TIP_LEN << ")\n"
 		"   -t <reads>    : min number of reads to thread (default: " << MIN_THREAD_READS << ")\n"
 		"   -c <cov>      : coverage threshold (default: " << COV_THRESHOLD << ")\n"
@@ -433,7 +433,6 @@ int Microassembler::run(int argc, char** argv)
 		"   -M <max-mismatch> : max number of mismatches for near-perfect repeats (default: " << MAX_MISMATCH << ")\n"
 		"   -B            : include bastards\n"
 		"\n"
-		"   -C            : extract reads from a BamFile \n"
 		"   -D            : print de novo mutations (read map must be sorted and tagged with id)\n"
 		"   -R            : print reference paths\n"
 		"   -A            : print graph after every stage\n"
@@ -449,15 +448,15 @@ int Microassembler::run(int argc, char** argv)
 
 	optarg = NULL;
 
-	while (!errflg && ((ch = getopt (argc, argv, "m:r:g:s:k:K:l:t:c:d:x:BDRACIhSL:T:M:vF:q:b:Q:P:p:E")) != EOF))
+	while (!errflg && ((ch = getopt (argc, argv, "b:r:g:s:k:K:l:t:c:d:x:BDRAIhSL:T:M:vF:q:C:f:Q:P:p:E")) != EOF))
 	{
 		switch (ch)
 		{
-			case 'm': MAPFILE          = optarg;       break; 
-			case 'r': REFFILE          = optarg;       break;
+			case 'b': BAMFILE          = optarg;       break; 
+			case 'f': REFFILE          = optarg;       break;
+		    case 'r': REGION           = optarg;       break;
 			case 's': READSET          = optarg;       break;
 			case 'p': PREFIX           = optarg;       break;
-			case 'g': RG_FILE          = optarg;       break;
 
 			case 'k': minK             = atoi(optarg); break;
 			case 'K': maxK             = atoi(optarg); break;
@@ -481,11 +480,10 @@ int Microassembler::run(int argc, char** argv)
 			case 'M': MAX_MISMATCH     = atoi(optarg); break;
 
 			case 'S': QUAD_ASM         = 1;			   break;
-			case 'C': BAMFILE          = 1; 		   break;
 			case 'E': FASTQ_ASM       = 1;            break;
 		  
 			case 'q': MIN_QV           = atoi(optarg); break;
-			case 'b': MIN_MAP_QUAL     = atoi(optarg); break;
+			case 'C': MIN_MAP_QUAL     = atoi(optarg); break;
 			case 'Q': QV_RANGE         = *optarg;      break;
 
 			case 'h': errflg = 1;                      break;
@@ -504,39 +502,16 @@ int Microassembler::run(int argc, char** argv)
 		}
 	}
 
-	if (QUAD_ASM)
-	{
-	  if (PREFIX.empty())
-	    {
-	      PREFIX = "ref";
-	    }
-	}
-    else if (FASTQ_ASM)
-    {
-		if (MAPFILE == "") { cerr << "ERROR: Must provide a fastq file (-m)" << endl; errflg++; }
-        if (PREFIX.empty()) { PREFIX = MAPFILE; }
+    if (BAMFILE.empty()) { cerr << "ERROR: Must provide a bamfile (-b)" << endl; errflg++; }
+    if (REFFILE.empty()) {
+        cerr << "ERROR: Must provide a reffile (-f)" << endl; errflg++;
+    } else {
+        reference.open(REFFILE);
     }
-	else
-	{
-		if (MAPFILE == "") { cerr << "ERROR: Must provide a mapfile (-m)" << endl; errflg++; }
-		if (REFFILE == "") { cerr << "ERROR: Must provide a reffile (-r)" << endl; errflg++; }
-	}
 
 	if (errflg) { exit(EXIT_FAILURE); }
 
-	if (PREFIX.empty())
-	{
-		//PREFIX = MAPFILE;
-		PREFIX = RG_FILE;
-	}
-
 	printConfiguration(cerr);
-
-	//if (!QUAD_ASM)
-	if (REFFILE != "")
-	{
-		loadRefs(REFFILE);
-	}
 
 	// Process the reads
 	FILE * fp = NULL;
@@ -544,8 +519,8 @@ int Microassembler::run(int argc, char** argv)
 	//BamWriter writer;
 	SamHeader header;
 	RefVector references;
-	if(BAMFILE) { // attempt to open our BamMultiReader
-		if ( !reader.Open(PREFIX + "/" + MAPFILE) ) {
+	if(!BAMFILE.empty()) { // attempt to open our BamMultiReader
+		if ( !reader.Open(BAMFILE) ) {
 			cerr << "Could not open input BAM files." << endl;
 			return -1;
 		}
@@ -572,28 +547,12 @@ int Microassembler::run(int argc, char** argv)
 		*/
 
 		//load the read group information
-		if(RG_FILE.compare("") != 0) {
-			if (QUAD_ASM) {
-				loadRG(RG_FILE,FATHER);
-				loadRG(RG_FILE,MOTHER);
-				loadRG(RG_FILE,SELF);
-				loadRG(RG_FILE,SIBLING);
-			}
-			else {
-				loadRG(RG_FILE,0);
-			}
-		}
-		else {
-			readgroups.insert("null");
-		}
+        readgroups.insert("null");
 		
 		//set<string>::iterator prova;
 		//for ( prova=readgroups.begin() ; prova != readgroups.end(); prova++ ) {
 		//	cout << (*prova) <<  endl;
 		//}
-	}
-	else { // text file with mapped reads
-		fp = xfopen(MAPFILE.c_str(), "r");
 	}
 
 	Graph_t g;
@@ -640,62 +599,20 @@ int Microassembler::run(int argc, char** argv)
 
 	int idx;
 
-	if (FASTQ_ASM)
-	{
-		while (fscanf(fp, "%s", readname) == 1)
-		{
-			fscanf(fp, "%s", seq1);
-			fscanf(fp, "%s", seq2); // header2
-			fscanf(fp, "%s", qv1);
-
-			g.addUnpaired(READSET, readname+1, seq1, qv1, Graph_t::CODE_MAPPED);
-			readcnt++;
-		}
-
-		if (REFFILE == "")
-		  {
-		    fastqAsm(g, PREFIX);
-		  }
-		else
-		  {
-		    graphref = reftable.begin()->first;
-		    processGraph(g, graphref, PREFIX, minK, maxK);
-		  }
-
-		graphcnt++;
-	}
-	else if (PRINT_DENOVO)
-	{
-		// To find denovos, the reads will be tagged with read set and sorted together
-		while (fscanf(fp, "%s\t%s\t%d\t%s\t%d\t%d\t%s\t%s\t%s\t%s\t%s",
-			set, code, &idx, chr, &refstart, &refend, readname, seq1, qv1, seq2, qv2) == 11)
-		{
-			paircnt++;
-			readcnt+=2;
-
-			// printf("c:%s s:%d e:%d n:%s s:%s q:%s s:%s q:%s\n", 
-			//         chr, refstart, refend, readname, seq1, qv1, seq2, qv2);
-			//
-			snprintf(refbuf, BUFFER_SIZE, "%s:%d-%d", chr, refstart, refend);
-
-			string refstr = refbuf;
-
-			if (refstr != graphref)
-			{
-				processGraph(g, graphref, PREFIX, minK, maxK);
-				graphref = refstr;
-				graphcnt++;
-			}
-
-			g.addPair(set, readname, seq1, qv1, seq2, qv2, code[0]);
-		}
-
-		processGraph(g, graphref, PREFIX, minK, maxK);
-	}
-	else if(BAMFILE) {
+	if (!BAMFILE.empty()) {
 		
 		// for each reference location
 		BamRegion region;
+        string chr; int start, end;
+        parseRegion(REGION, chr, start, end);
+		region.LeftRefID = reader.GetReferenceID(chr); // atoi((refinfo->refchr).c_str());
+        region.RightRefID = reader.GetReferenceID(chr); // atoi((refinfo->refchr).c_str());
+        region.LeftPosition = start;
+        region.RightPosition = end;
+        //cout << "region = " << refinfo->refchr << ":" << refinfo->refstart << "-" << refinfo->refend << endl; 
+
+        
+
 		map<string, Ref_t *>::iterator ri;
 		for ( ri=reftable.begin() ; ri != reftable.end(); ri++ ) {
 			graphref = (*ri).first;
@@ -706,11 +623,7 @@ int Microassembler::run(int argc, char** argv)
 			if(isNseq(refinfo->rawseq)) { continue; } 
 			if(isRepeat(refinfo->rawseq, maxK)) { continue; } 
 
-			region.LeftRefID = reader.GetReferenceID(refinfo->refchr); // atoi((refinfo->refchr).c_str());
-			region.RightRefID = reader.GetReferenceID(refinfo->refchr); // atoi((refinfo->refchr).c_str());
-			region.LeftPosition = refinfo->refstart;
-			region.RightPosition = refinfo->refend;
-			//cout << "region = " << refinfo->refchr << ":" << refinfo->refstart << "-" << refinfo->refend << endl; 
+	
 
 			bool jump = reader.SetRegion(region);
 			if(!jump) {
@@ -830,23 +743,6 @@ int Microassembler::run(int argc, char** argv)
 
 	cerr << "total reads: " << readcnt << " pairs: " << paircnt << " total graphs: " << graphcnt << " ref sequences: " << reftable.size() <<  endl;
 
-	if(!BAMFILE) {
-		if (!feof(fp))
-		{
-			cerr << "ERROR: map file not at EOF." << endl;
-
-			fgets(refbuf, BUFFER_SIZE, fp);
-			fprintf(stderr, "line: %s\n", refbuf);
-
-			fgets(refbuf, BUFFER_SIZE, fp);
-			fprintf(stderr, "line: %s\n", refbuf);
-
-			if (PRINT_DENOVO)
-			{
-				cerr << "WARNING: map file must have read sets tagged and sorted together for finding de novos" << endl;
-			}
-		}
-	}
 	return 0;
 }
 
