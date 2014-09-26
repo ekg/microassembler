@@ -185,7 +185,7 @@ public:
 	~Microassembler() { }
 	
 	void printConfiguration(ostream & out);	
-	void loadRefs(const string & filename);
+    void createRef(const string & hdr, const string & s, int refstart, int refend);
 	void loadRG(const string & filename, int member);
 	void processGraph(Graph_t & g, const string & refname, const string & prefix, int minK, int maxK);
 	void fastqAsm(Graph_t & g, const string & prefix);

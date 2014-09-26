@@ -6,7 +6,7 @@ INCLUDES := -I$(BAMTOOLS_DIR)/include/ -L$(BAMTOOLS_DIR)/lib/
 FASTAHACK := fastahack/Fasta.o
 OBJS := $(FASTAHACK) fastahack/split.o
 
-all: Microassembler
+all: microassembler
 
 
 libbamtools.a:
@@ -20,9 +20,9 @@ $(VCFLIB): libbamtools.a
 	cd vcflib && $(MAKE)
 
 
-Microassembler: Microassembler.cc Microassembler.hh align.cc util.cc Mer.hh Ref.hh ReadInfo.hh ReadStart.hh Transcript.hh Edge.cc Edge.hh ContigLink.hh Node.cc Node.hh Path.cc Path.hh ContigLink.cc Graph.cc Graph.hh libbamtools.a $(FASTAHACK)
-	$(CXX) $(CXXFLAGS) $(INCLUDES) $(OBJS) Microassembler.cc Edge.cc Node.cc Graph.cc Path.cc ContigLink.cc align.cc util.cc -o Microassembler -lbamtools -lz
+microassembler: Microassembler.cc Microassembler.hh align.cc util.cc Mer.hh Ref.hh ReadInfo.hh ReadStart.hh Transcript.hh Edge.cc Edge.hh ContigLink.hh Node.cc Node.hh Path.cc Path.hh ContigLink.cc Graph.cc Graph.hh libbamtools.a $(FASTAHACK)
+	$(CXX) $(CXXFLAGS) $(INCLUDES) $(OBJS) Microassembler.cc Edge.cc Node.cc Graph.cc Path.cc ContigLink.cc align.cc util.cc -o microassembler -lbamtools -lz
 
 clean:
-	rm -rf Microassembler libbamtools.a $(OBJS)
+	rm -rf microassembler libbamtools.a $(OBJS)
 	cd $(BAMTOOLS_DIR)/build && make clean

@@ -61,64 +61,21 @@ void Microassembler::printConfiguration(ostream & out)
 // loadRef
 //////////////////////////////////////////////////////////////
 
-void Microassembler::loadRefs(const string & filename)
-{
-	cerr << "LoadRef " << filename << endl;
+void Microassembler::createRef(const string & hdr, const string & s, int refstart, int refend) {
+    Ref_t* ref = new Ref_t(minK);
+    ref->hdr = hdr;
+    ref->seq = s;
+    ref->rawseq = s;
+    ref->refchr = hdr;
+    ref->refstart = refstart;
+    ref->refend = refend;
 
-	FILE * fp = xfopen(PREFIX + "/" + filename, "r");
-
-	string s, hdr;
-
-	while (Fasta_Read (fp, s, hdr))
-	{
-		for (unsigned int i = 0; i < s.length(); i++) { s[i] = toupper(s[i]); }
-
-		Ref_t * ref = new Ref_t(minK);
-		ref->hdr = hdr;
-		ref->seq = s;
-		ref->rawseq = s;
-
-		cerr << "hdr:\t" << hdr << endl;
-
-		size_t x = hdr.find_first_of(':');
-		size_t y = hdr.find_first_of('-', x);
-
-		string start = hdr.substr(x+1, y-x-1);
-		string end   = hdr.substr(y+1, string::npos);
-
-		ref->refchr   = hdr.substr(0,x);
-		ref->refstart = atoi(start.c_str());
-		ref->refend   = atoi(end.c_str());
-
-		size_t z = hdr.find_first_of(';', y);
-
-		if (z != string::npos)
-		{
-			y = hdr.find_first_of('-', z);
-
-			start = hdr.substr(z+1, y-z-1);
-			end =   hdr.substr(y+1, string::npos);
-
-			hdr = ref->refchr;
-			hdr += ":";
-			hdr += start;
-			hdr += "-";
-			hdr += end;
-
-			ref->hdr = hdr;
-		}
-
-		//cerr << "label:\t"    << ref->hdr << endl;
-		//cerr << "refchr:\t"   << ref->refchr << endl;
-		//cerr << "refstart:\t" << ref->refstart << endl;
-		//cerr << "refend:\t"   << ref->refend << endl;
-
-		reftable.insert(make_pair(hdr, ref));
-	}
-
-	cerr << "Loaded " << reftable.size() << " ref sequences" << endl << endl;
-
-	xfclose(fp);
+    //cerr << "label:\t"    << ref->hdr << endl;
+    //cerr << "refchr:\t"   << ref->refchr << endl;
+    //cerr << "refstart:\t" << ref->refstart << endl;
+    //cerr << "refend:\t"   << ref->refend << endl;
+    
+    reftable.insert(make_pair(hdr, ref));
 }
 
 // load Red Groups
@@ -181,7 +138,7 @@ void Microassembler::loadRG(const string & filename, int member) {
 
 void Microassembler::processGraph(Graph_t & g, const string & refname, const string & prefix, int minkmer, int maxkmer)
 {	
-	if (refname != "")
+	if (!refname.empty())
 	{
 		graphCnt++;
 		
@@ -205,7 +162,8 @@ void Microassembler::processGraph(Graph_t & g, const string & refname, const str
 			cerr << "Can't find ref info for: " << refname << endl;
 			exit(1);
 		}
-		Ref_t * refinfo = ri->second;
+		Ref_t * ref = ri->second;
+        
 		
 		bool rptInRef;
 		bool rptInQry;
@@ -214,14 +172,14 @@ void Microassembler::processGraph(Graph_t & g, const string & refname, const str
 		// dinamic kmer mode
 		for (int k=minkmer; k<=maxkmer; k++) {
 			g.setK(k);
-			refinfo->setK(k);
+			ref->setK(k);
 			
 			rptInRef = false;
 			rptInQry = false;
 			cycleInGraph = false;
 
 			// exit if the region has a repeat of size K
-			if(isRepeat(refinfo->rawseq, k)) { 
+			if(isRepeat(ref->rawseq, k)) { 
 				cerr << "Repeat in reference sequence for kmer " << k << endl;
 				rptInRef = true;
 				//return; 
@@ -229,7 +187,7 @@ void Microassembler::processGraph(Graph_t & g, const string & refname, const str
 			} 
 
 			// exit if the region has an almost perfect repeat of size K
-			if(isAlmostRepeat(refinfo->rawseq, k, MAX_MISMATCH)) { 
+			if(isAlmostRepeat(ref->rawseq, k, MAX_MISMATCH)) { 
 				cerr << "Near-perfect repeat in reference sequence for kmer " << k << endl;
 				rptInRef = true;
 				//return; 
@@ -239,22 +197,22 @@ void Microassembler::processGraph(Graph_t & g, const string & refname, const str
 			//if no repeats in the reference build graph			
 			g.buildgraph();
 			
-			double avgcov = ((double) g.totalreadbp_m) / ((double)refinfo->rawseq.length());			
+			double avgcov = ((double) g.totalreadbp_m) / ((double)ref->rawseq.length());			
 
 			cerr << "reads: "   << g.readid2info.size()
-				<< " reflen: "  << refinfo->rawseq.length()
-				<< " readlen: " << g.totalreadbp_m
-				<< " cov: "     << avgcov << endl;
+                 << " reflen: "  << ref->rawseq.length()
+                 << " readlen: " << g.totalreadbp_m
+                 << " cov: "     << avgcov << endl;
 
 			//printReads();
 			g.printStats();
 	
-			string out_prefix = prefix + "/"  + READSET + "." + refname;
+			string out_prefix = prefix + "."  + READSET + "." + refname;
 	
 			if (PRINT_ALL) { g.printDot(out_prefix + ".0.dot"); }
 
 			// mark source and sink
-			g.markRefEnds(refinfo);
+			g.markRefEnds(ref);
 			//g.markRefNodes();
 			
 			// if there is a cycle in the graph skip analysis
@@ -337,14 +295,14 @@ void Microassembler::fastqAsm(Graph_t & g, const string & prefix)
 		
 	if (PRINT_ALL) 
     {
-      g.printDot(out_prefix + ".0c.dot");
-      g.printFasta(out_prefix + ".0c.fa");
+        g.printDot(out_prefix + ".0c.dot");
+        g.printFasta(out_prefix + ".0c.fa");
     }
 
 	if (PRINT_ALL) 
     { 
-      g.printDot(out_prefix + ".0.dot"); 
-      g.printFasta(out_prefix + ".0.fa"); 
+        g.printDot(out_prefix + ".0.dot"); 
+        g.printFasta(out_prefix + ".0.fa"); 
     }
     
 	// Initial compression
@@ -353,32 +311,32 @@ void Microassembler::fastqAsm(Graph_t & g, const string & prefix)
 
 	if (PRINT_RAW) 
     {
-      g.printDot(out_prefix + ".1c.dot");
-      g.printFasta(out_prefix + ".1c.fa");
+        g.printDot(out_prefix + ".1c.dot");
+        g.printFasta(out_prefix + ".1c.fa");
     }
 
 	// Remove low coverage
 	g.removeLowCov();
 	if (PRINT_ALL) 
     { 
-      g.printDot(out_prefix + ".2l.dot"); 
-      g.printFasta(out_prefix + ".2l.fa"); 
+        g.printDot(out_prefix + ".2l.dot"); 
+        g.printFasta(out_prefix + ".2l.fa"); 
     }
 
 	// Remove tips
 	g.removeTips();
 	if (PRINT_ALL) 
     { 
-      g.printDot(out_prefix + ".3t.dot"); 
-      g.printFasta(out_prefix + ".3t.fa"); 
+        g.printDot(out_prefix + ".3t.dot"); 
+        g.printFasta(out_prefix + ".3t.fa"); 
     }
 
 	// Thread reads
 	g.threadReads();
 	if (PRINT_ALL) 
     { 
-      g.printDot(out_prefix + ".4thread.dot"); 
-      g.printFasta(out_prefix + ".4thread.fa"); 
+        g.printDot(out_prefix + ".4thread.dot"); 
+        g.printFasta(out_prefix + ".4thread.fa"); 
     }
 
 	// scaffold contigs
@@ -397,7 +355,7 @@ void Microassembler::fastqAsm(Graph_t & g, const string & prefix)
 
 int Microassembler::run(int argc, char** argv)
 {
-	string USAGE = " Usage: Microassembler [options] -m mapfile -r ref.fa\n";
+	string USAGE = "Usage: Microassembler [options] -b bamfile -f ref.fa -r chr:start-end\n";
 
 	if (argc == 1)
 	{
@@ -415,7 +373,7 @@ int Microassembler::run(int argc, char** argv)
 		"   -b <bamfile>  : file of mapped reads\n"
         "   -r <region>   : target region in chr:start-end format e.g. chrX:0-10\n"
 		"   -s <name>     : label for reads (default: " << READSET << ")\n"
-		"   -p <prefix>   : use prefix (default: mapfile)\n"
+		"   -p <prefix>   : use prefix (default: region)\n"
 		"\n"
 		"   -k <kmersize> : min kmersize (default: " << minK << ")\n"
 		"   -K <kmersize> : max kmersize (default: " << maxK << ")\n"
@@ -452,46 +410,46 @@ int Microassembler::run(int argc, char** argv)
 	{
 		switch (ch)
 		{
-			case 'b': BAMFILE          = optarg;       break; 
-			case 'f': REFFILE          = optarg;       break;
-		    case 'r': REGION           = optarg;       break;
-			case 's': READSET          = optarg;       break;
-			case 'p': PREFIX           = optarg;       break;
+        case 'b': BAMFILE          = optarg;       break; 
+        case 'f': REFFILE          = optarg;       break;
+        case 'r': REGION           = optarg;       break;
+        case 's': READSET          = optarg;       break;
+        case 'p': PREFIX           = optarg;       break;
 
-			case 'k': minK             = atoi(optarg); break;
-			case 'K': maxK             = atoi(optarg); break;
-			case 'l': MAX_TIP_LEN      = atoi(optarg); break;
-			case 't': MIN_THREAD_READS = atoi(optarg); break;
-			case 'c': COV_THRESHOLD    = atoi(optarg); break;
-			case 'x': MIN_COV_RATIO    = atof(optarg); break;
-			case 'd': TIP_COV_THRESHOLD= atoi(optarg); break;
+        case 'k': minK             = atoi(optarg); break;
+        case 'K': maxK             = atoi(optarg); break;
+        case 'l': MAX_TIP_LEN      = atoi(optarg); break;
+        case 't': MIN_THREAD_READS = atoi(optarg); break;
+        case 'c': COV_THRESHOLD    = atoi(optarg); break;
+        case 'x': MIN_COV_RATIO    = atof(optarg); break;
+        case 'd': TIP_COV_THRESHOLD= atoi(optarg); break;
 
-			case 'B': INCLUDE_BASTARDS = 1;            break;
+        case 'B': INCLUDE_BASTARDS = 1;            break;
 
-			case 'v': VERBOSE          = 1;            break;
-			case 'D': PRINT_DENOVO     = 1;            break;
-			case 'R': PRINT_REFPATH    = 1;            break;
-			case 'A': PRINT_ALL        = 1;            break;
-			case 'I': PRINT_RAW        = 0;            break;
-			case 'L': NODE_STRLEN      = atoi(optarg); break;
-			case 'F': DFS_LIMIT        = atoi(optarg); break;
-			case 'P': PATH_LIMIT       = atoi(optarg); break;
-			case 'T': MAX_INDEL_LEN    = atoi(optarg); break;
-			case 'M': MAX_MISMATCH     = atoi(optarg); break;
+        case 'v': VERBOSE          = 1;            break;
+        case 'D': PRINT_DENOVO     = 1;            break;
+        case 'R': PRINT_REFPATH    = 1;            break;
+        case 'A': PRINT_ALL        = 1;            break;
+        case 'I': PRINT_RAW        = 0;            break;
+        case 'L': NODE_STRLEN      = atoi(optarg); break;
+        case 'F': DFS_LIMIT        = atoi(optarg); break;
+        case 'P': PATH_LIMIT       = atoi(optarg); break;
+        case 'T': MAX_INDEL_LEN    = atoi(optarg); break;
+        case 'M': MAX_MISMATCH     = atoi(optarg); break;
 
-			case 'S': QUAD_ASM         = 1;			   break;
-			case 'E': FASTQ_ASM       = 1;            break;
+        case 'S': QUAD_ASM         = 1;			   break;
+        case 'E': FASTQ_ASM       = 1;            break;
 		  
-			case 'q': MIN_QV           = atoi(optarg); break;
-			case 'C': MIN_MAP_QUAL     = atoi(optarg); break;
-			case 'Q': QV_RANGE         = *optarg;      break;
+        case 'q': MIN_QV           = atoi(optarg); break;
+        case 'C': MIN_MAP_QUAL     = atoi(optarg); break;
+        case 'Q': QV_RANGE         = *optarg;      break;
 
-			case 'h': errflg = 1;                      break;
+        case 'h': errflg = 1;                      break;
 
-			case '?':
+        case '?':
 			fprintf (stderr, "Unrecognized option -%c\n", optopt);
 
-			default:
+        default:
 			errflg = true;
 		}
 
@@ -501,6 +459,9 @@ int Microassembler::run(int argc, char** argv)
 			exit (EXIT_FAILURE);
 		}
 	}
+
+    if (REGION.empty()) { cerr << "ERROR: A region is required" << endl; errflg++; }
+    if (PREFIX.empty()) { PREFIX = REGION; }
 
     if (BAMFILE.empty()) { cerr << "ERROR: Must provide a bamfile (-b)" << endl; errflg++; }
     if (REFFILE.empty()) {
@@ -530,20 +491,20 @@ int Microassembler::run(int argc, char** argv)
 		reader.LocateIndex(); // locate and load BAM index file
 
 		/*
-		string outputBamFilename = PREFIX + "/outputBam.bam"; 
-		// attempt to open our BamWriter
-		if ( !writer.Open(outputBamFilename, header, references) ) {
-			cerr << "Could not open output BAM file" << endl;
-			return -1;
-		}
+          string outputBamFilename = PREFIX + "/outputBam.bam"; 
+          // attempt to open our BamWriter
+          if ( !writer.Open(outputBamFilename, header, references) ) {
+          cerr << "Could not open output BAM file" << endl;
+          return -1;
+          }
 		*/
 		
 		/*
-		vector<RefData>::iterator it;
-		cout << "refvector contains:" << endl;
-		for ( it=references.begin() ; it < references.end(); it++ ) {
-		cout << (*it).RefName << " " << (*it).RefLength << endl;
-		}
+          vector<RefData>::iterator it;
+          cout << "refvector contains:" << endl;
+          for ( it=references.begin() ; it < references.end(); it++ ) {
+          cout << (*it).RefName << " " << (*it).RefLength << endl;
+          }
 		*/
 
 		//load the read group information
@@ -580,7 +541,6 @@ int Microassembler::run(int argc, char** argv)
 
 	string graphref = "";
 
-	char set  [BUFFER_SIZE];
 	char code [BUFFER_SIZE];
 	char chr  [BUFFER_SIZE];
 	int  refstart;
@@ -609,107 +569,80 @@ int Microassembler::run(int argc, char** argv)
         region.RightRefID = reader.GetReferenceID(chr); // atoi((refinfo->refchr).c_str());
         region.LeftPosition = start;
         region.RightPosition = end;
-        //cout << "region = " << refinfo->refchr << ":" << refinfo->refstart << "-" << refinfo->refend << endl; 
+        cout << "region = " << chr << ":" << start << "-" << end << endl; 
 
-        
+        string refseq = reference.getSubSequence(chr, start, end-start);
+        createRef(chr, refseq, start, end);
 
-		map<string, Ref_t *>::iterator ri;
-		for ( ri=reftable.begin() ; ri != reftable.end(); ri++ ) {
-			graphref = (*ri).first;
-			//cout << graphref << endl;
-			Ref_t * refinfo = (*ri).second;
-			
-			// continue if the region has only Ns or prefect repeat of size maxK
-			if(isNseq(refinfo->rawseq)) { continue; } 
-			if(isRepeat(refinfo->rawseq, maxK)) { continue; } 
+        // continue if the region has only Ns or prefect repeat of size maxK
+        if(isNseq(refseq)) { cerr << "region is only N" << endl; return 0; } 
+        if(isRepeat(refseq, maxK)) { cerr << "region is repeat of maxK=" <<maxK << endl; return 0; } 
 
 	
 
-			bool jump = reader.SetRegion(region);
-			if(!jump) {
-				cout << "Error: not able to jump successfully to the region's left boundary" << endl;
-				return -1;
-			}
+        bool jump = reader.SetRegion(region);
+        if(!jump) {
+            cout << "Error: not able to jump successfully to the region's left boundary" << endl;
+            return -1;
+        }
 
-			// iterate through all alignments
-			//int num_PCR_duplicates = 0;
-			BamAlignment al;
-			string rg = "";
-			int i = 0;
-			int j = 0;
-			int num_unmapped = 0;
-			while ( reader.GetNextAlignment(al) ) { // get next alignment and populate the alignment's string data fields
+        // iterate through all alignments
+        //int num_PCR_duplicates = 0;
+        BamAlignment al;
+        string rg = "";
+        int num_unmapped = 0;
+        while ( reader.GetNextAlignment(al) ) { // get next alignment and populate the alignment's string data fields
 				
-				// skip alignments outside region
-				int alstart = al.Position;
-				int alend = al.GetEndPosition();
-				if( (alstart < region.LeftPosition) || (alend > region.RightPosition) ) { continue; }
+            // skip alignments outside region
+            //int alstart = al.Position;
+            //int alend = al.GetEndPosition();
+            //if( (alstart < region.LeftPosition) || (alend > region.RightPosition) ) { continue; }
 				
-				if ( (al.MapQuality >= MIN_MAP_QUAL) && !al.IsDuplicate() ) { // only keeping ones with high map quality and skip PCR duplicates
+            if ( (al.MapQuality >= MIN_MAP_QUAL) && !al.IsDuplicate() ) { // only keeping ones with high map quality and skip PCR duplicates
 										
-					int mate = 0;
-					if(al.IsFirstMate()) { mate = 1; }
-					if(al.IsSecondMate()) { mate = 2; }
+                int mate = 0;
+                if(al.IsFirstMate()) { mate = 1; }
+                if(al.IsSecondMate()) { mate = 2; }
 				
-					al.GetTag("RG", rg); // get the read group information for the read
-					if(rg.empty()) { rg = "null"; }
+                al.GetTag("RG", rg); // get the read group information for the read
+                if(rg.empty()) { rg = "null"; }
 					
-					if( !QUAD_ASM ) {
-						if ( (readgroups.find("null") != readgroups.end())  || (readgroups.find(rg) != readgroups.end()) ) { // select reads in the read group RG
+                if ( (readgroups.find("null") != readgroups.end())  || (readgroups.find(rg) != readgroups.end()) ) { // select reads in the read group RG
 							
-							//writer.SaveAlignment(al); // save alignment to output bam file
+                    //writer.SaveAlignment(al); // save alignment to output bam file
 							
-							if (mate>1) { // mated pair
-								if( !(al.IsMapped()) ) { // unmapped read
-									g.addpaired(READSET, al.Name, al.QueryBases, al.Qualities, mate, Graph_t::CODE_BASTARD);
-									num_unmapped++; 
-								}
-								else { // mapped reads
-									g.addpaired(READSET, al.Name, al.QueryBases, al.Qualities, mate, Graph_t::CODE_MAPPED);								
-								}
-							}
-							else { // unpaired
- 								g.addUnpaired(READSET, al.Name, al.QueryBases, al.Qualities, Graph_t::CODE_MAPPED);	
-							}
-							//cout << al.Name << endl;
-							readcnt++;
+                    if (mate>1) { // mated pair
+                        if( !(al.IsMapped()) ) { // unmapped read
+                            g.addpaired(READSET, al.Name, al.QueryBases, al.Qualities, mate, Graph_t::CODE_BASTARD);
+                            num_unmapped++; 
+                        }
+                        else { // mapped reads
+                            g.addpaired(READSET, al.Name, al.QueryBases, al.Qualities, mate, Graph_t::CODE_MAPPED);								
+                        }
+                    }
+                    else { // unpaired
+                        g.addUnpaired(READSET, al.Name, al.QueryBases, al.Qualities, Graph_t::CODE_MAPPED);	
+                    }
+                    //cout << al.Name << endl;
+                    readcnt++;
 
-							//void addMates(ReadId_t r1, ReadId_t r2)
-							//{
-							//g.readid2info[r1].mateid_m = r2;
-							//g.readid2info[r2].mateid_m = r1;
-							//}
-						}
-					}
-					else if ( QUAD_ASM ) { // select all the reads in the family by member type
-						i++; j++; 	
-						//if ( RG_father.find(rg) != RG_father.end() && i%2==0 ) {
-						//	g.addpaired("father", al.Name, al.QueryBases, al.Qualities, mate, code[0]);
-						//	readcnt++;
-						//}
-						if ( RG_mother.find(rg) != RG_mother.end() && i%2==0 ) {
-							g.addpaired("mother", al.Name, al.QueryBases, al.Qualities, mate, code[0]);
-							readcnt++;
-						}
-						if ( RG_self.find(rg) != RG_self.end() && j%2==0 ) {
-							g.addpaired("self", al.Name, al.QueryBases, al.Qualities, mate, code[0]);
-							readcnt++;
-						}
-						//if ( RG_sibling.find(rg) != RG_sibling.end() ) {
-						//	g.addpaired("sib", al.Name, al.QueryBases, al.Qualities, mate, code[0]);
-						//	readcnt++;
-						//}
-					}
-				}
-				//else{ num_PCR_duplicates++; }
-			}
-			// close the reader & writer
-			//cout << "Number of PCR duplicates: " << num_PCR_duplicates << endl;	
-			//cout << "Number of unmapped reads: " << num_unmapped << endl;	
-			processGraph(g, graphref, PREFIX, minK, maxK);
-		}
-		reader.Close();
-		//writer.Close();
+                    //void addMates(ReadId_t r1, ReadId_t r2)
+                    //{
+                    //g.readid2info[r1].mateid_m = r2;
+                    //g.readid2info[r2].mateid_m = r1;
+                    //}
+                }
+
+            }
+            //else{ num_PCR_duplicates++; }
+        }
+        // close the reader & writer
+        //cout << "Number of PCR duplicates: " << num_PCR_duplicates << endl;	
+        //cout << "Number of unmapped reads: " << num_unmapped << endl;	
+        processGraph(g, chr, PREFIX, minK, maxK);
+
+        reader.Close();
+        //writer.Close();
 	}
 	else
 	{
