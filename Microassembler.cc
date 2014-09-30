@@ -260,9 +260,10 @@ void Microassembler::processGraph(Graph_t & g, const string & refname, const str
 			if (PRINT_REFPATH)
 			{
 				g.markRefNodes();
-				g.countRefPath(out_prefix + ".paths.fa", refname, false);
-				//g.printFasta(prefix + "." + refname + ".nodes.fa");
+				g.countRefPath(out_prefix + ".paths.fa", refname, true);
+			    //g.printFasta(prefix + "." + refname + ".nodes.fa");
 			}
+
 
 			if (PRINT_ALL) { g.printDot(out_prefix + ".final.dot"); }
 			

@@ -619,6 +619,7 @@ void Graph_t::dfs(Node_t * source, Node_t * sink, Ori_t dir,
 	while (!Q.empty())
 	{
 		visit++;
+        cerr << "visit# " << visit << endl;
 
 		if ((DFS_LIMIT) && (visit > DFS_LIMIT))
 		{
@@ -820,21 +821,22 @@ void Graph_t::dfs(Node_t * source, Node_t * sink, Ori_t dir,
 					cerr << " " << transcript[ti].pos << ":" << transcript[ti].ref << "|" << transcript[ti].qry << "|" << transcript[ti].getAvgCov() << "|" << transcript[ti].getMinCov() << "|" << transcript[ti].prev_bp_ref << "|" << transcript[ti].prev_bp_alt;
 				}
 
-				cerr << endl;
-
 				if      ((path->snp_bp + path->ins_bp + path->del_bp) == 0) { perfect++;   }
 				else if ((path->snp_bp) == 0)                               { withindel++; }
 				else if ((path->ins_bp + path->del_bp) == 0)                 { withsnps++;  }
 				else                                                        { withmix++;   }
 
+                /*
 				if(printPathsToFile) {
+					cerr << "printed almost" << endl;
 					fprintf(fp,  ">p_%s:%d-%d_%d len=%d cov=%0.2f mincov=%0.2f maxcov=%0.2f pathlen=%d hasCycle=%d match=%d snp=%d ins=%d del=%d pathstr=%s\n",
 						ref->refchr.c_str(), ref->refstart, ref->refend, complete, 
 						path->strlen(), path->cov(), path->mincov(), path->maxcov(), path->pathlen(), 
 						path->hasCycle_m, path->match_bp, path->snp_bp, path->ins_bp, path->del_bp, path->pathstr().c_str());
-					
+					cerr << "printed partly" << endl;
 					fprintf(fp, "%s\n", path->str().c_str());
 				}
+                */
 
 				for (unsigned int i = 0; i < path->nodes_m.size(); i++)
 				{
@@ -1749,21 +1751,28 @@ void Graph_t::countRefPath(const string & filename, const string & refname, bool
 		if(printPathsToFile) {
 			FILE * fp = xfopen(filename, "w");
 		
+            fprintf(stderr, "OMGXXX=\n");
 			fprintf(fp, ">ref_raw\n%s\n",
 				ref_m->rawseq.c_str());
 
 			fprintf(fp, ">ref_trim %s trim5:%d trim3:%d\n%s\n", 
 				refname.c_str(), ref_m->trim5, ref_m->trim3, ref_m->seq.c_str());
 		}
+        fprintf(stderr, "yehaw\n");
 
 		if (source_m != NULL && sink_m != NULL) {
+            fprintf(stderr, "entering dfs\n");
 			dfs(source_m, sink_m, F, ref_m, fp, printPathsToFile);
+            fprintf(stderr,"dfs exit\n");
 		}
+        fprintf(stderr, "before alignrefnodes mon\n");
 		alignRefNodes();
+        fprintf(stderr, "i&i made it bro\n");
 
 		if(printPathsToFile) { xfclose(fp); }
 		
 	}
+    fprintf(stderr, "yoooo\n");
 }
 
 
